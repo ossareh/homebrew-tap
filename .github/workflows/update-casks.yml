@@ -1,0 +1,67 @@
+name: Update casks
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-mux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for new mux release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST=$(gh api repos/coder/mux/releases/latest --jq '.tag_name' | sed 's/^v//')
+          CURRENT=$(grep 'version "' Casks/mux.rb | head -1 | sed 's/.*version "//;s/"//')
+
+          if [ "$LATEST" = "$CURRENT" ]; then
+            echo "Already up to date ($CURRENT)"
+            echo "updated=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Updating $CURRENT -> $LATEST"
+
+          # Get sha256 digests from the API (no large downloads needed)
+          SHA_ARM=$(gh api repos/coder/mux/releases/latest \
+            --jq ".assets[] | select(.name == \"mux-${LATEST}-arm64.dmg\") | .digest" \
+            | sed 's/^sha256://')
+          SHA_X64=$(gh api repos/coder/mux/releases/latest \
+            --jq ".assets[] | select(.name == \"mux-${LATEST}-x64.dmg\") | .digest" \
+            | sed 's/^sha256://')
+
+          if [ -z "$SHA_ARM" ] || [ -z "$SHA_X64" ]; then
+            echo "::error::Could not find expected .dmg assets for v${LATEST}"
+            exit 1
+          fi
+
+          # Update version
+          sed -i "s/version \"${CURRENT}\"/version \"${LATEST}\"/" Casks/mux.rb
+
+          # Update arm64 sha256 (first sha256 in file, inside on_arm block)
+          sed -i "0,/sha256 \"[a-f0-9]\{64\}\"/s//sha256 \"${SHA_ARM}\"/" Casks/mux.rb
+
+          # Update x64 sha256 (second sha256 in file, inside on_intel block)
+          # Use a temp file approach to replace only the second occurrence
+          awk -v new="$SHA_X64" 'BEGIN{n=0} /sha256 "[a-f0-9]{64}"/{n++; if(n==2){gsub(/sha256 "[a-f0-9]{64}"/, "sha256 \"" new "\"")}} {print}' Casks/mux.rb > Casks/mux.rb.tmp
+          mv Casks/mux.rb.tmp Casks/mux.rb
+
+          echo "updated=true" >> "$GITHUB_OUTPUT"
+          echo "version=$LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        if: steps.check.outputs.updated == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/mux.rb
+          git commit -m "bump mux to ${{ steps.check.outputs.version }}"
+          git push
