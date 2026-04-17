@@ -1,13 +1,13 @@
 cask "mux" do
-  version "0.23.0"
+  version "0.23.1"
 
   on_arm do
-    sha256 "2ee91c968970c75b1c0c5404c1d84b362dad251c2661bf1f701290d190e142d2"
+    sha256 "f1735301d93285fddcfeab81955f603e504b42a286f34467a258e26f5bab276c"
     url "https://github.com/coder/mux/releases/download/v#{version}/mux-#{version}-arm64.dmg"
   end
 
   on_intel do
-    sha256 "3f66ea8898f10935aea642ebd5fb3097a99f6ea13193ab6c844d64b2750bd2b0"
+    sha256 "1fb9edb4e23c000665b89b343d41fbc39d8dc888ea17fd5d48d469120eb98790"
     url "https://github.com/coder/mux/releases/download/v#{version}/mux-#{version}-x64.dmg"
   end
 
